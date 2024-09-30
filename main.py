@@ -4,6 +4,7 @@ import numpy as np
 import threading
 import dearpygui.dearpygui as dpg
 import time
+import re
 
 ip = "192.168.178.27"
 port = 3333
@@ -108,20 +109,37 @@ def update_texture(image):
 def update_thread(ip, port):
     last_time = time.time()
     while True:
-        image = receive_image(ip, port)
-        if image is not None:
-            current_time = time.time()
-            time_diff = current_time - last_time
-            fps = 1.0 / time_diff if time_diff > 0 else 0
-            print(f"FPS: {fps:.2f}")
-            last_time = current_time
-            update_texture(image)
+        #image = receive_image(ip, port)
+        #if image is not None:
+        #    current_time = time.time()
+        #    time_diff = current_time - last_time
+        #    fps = 1.0 / time_diff if time_diff > 0 else 0
+        #    print(f"FPS: {fps:.2f}")
+        #    last_time = current_time
+        #    update_texture(image)
 
         imu_data = receive_imu(ip, port)
         if imu_data is not None:
             dpg.set_value("imu_textfield", imu_data)
+
+            acceleration = re.findall(r'Acceleration\[(.*?)\]', imu_data)[0]
+            angular_rate = re.findall(r'AngularRate\[(.*?)\]', imu_data)[0]
+            temperature = re.findall(r'Temperature\[(.*?)\]', imu_data)[0]
+            acceleration_array = list(map(int, acceleration.split(',')))
+            angular_rate_array = list(map(int, angular_rate.split(',')))
+            temperature_value = float(temperature)
+
+            print("Acceleration:", acceleration_array)
+            print("Angular Rate:", angular_rate_array)
+            print("Temperature:", temperature_value)
+
+        current_time = time.time()
+        time_diff = current_time - last_time
+        fps = 1.0 / time_diff if time_diff > 0 else 0
+        print(f"FPS: {fps:.2f}")
+        last_time = current_time
         
-        time.sleep(0.001)
+        time.sleep(0.01)
 
 def update_leds(sender, app_data, user_data):
     # Convert the color values from float (0.0-1.0) to integer (0-255)
