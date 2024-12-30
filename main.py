@@ -6,7 +6,7 @@ import dearpygui.dearpygui as dpg
 import time
 import re
 
-ip = "192.168.178.27"
+ip = "192.168.1.16"
 port = 3333
 
 def create_video_from_images(images, output_filename, fps=12):
@@ -57,7 +57,7 @@ def send_data(command, payload):
 def get_data(ip, port, command):
     # Create a UDP socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.settimeout(1.0)  # Set timeout to 1 second
+    sock.settimeout(0.2)  # Set timeout to 1 second
 
     try:
         message = command
@@ -100,24 +100,20 @@ def receive_imu(ip, port):
 
 def update_texture(image):
     if image is not None:
-        height, width, _ = image.shape
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGBA)
-        image = np.flipud(image)  # Flip the image vertically for correct display
-        image = np.asfarray(image, dtype='f') / 255.0  # Normalize the image
-        dpg.set_value("texture_tag", image.flatten().tolist())
+        image = image.astype(np.float32) / 255.0
+        image = cv2.flip(image, 0)
+
+        dpg.set_value("texture_tag", image.ravel())
 
 def update_thread(ip, port):
     last_time = time.time()
     while True:
-        #image = receive_image(ip, port)
-        #if image is not None:
-        #    current_time = time.time()
-        #    time_diff = current_time - last_time
-        #    fps = 1.0 / time_diff if time_diff > 0 else 0
-        #    print(f"FPS: {fps:.2f}")
-        #    last_time = current_time
-        #    update_texture(image)
+        image = receive_image(ip, port)
+        if image is not None:
+            update_texture(image)
 
+        imu_data = None
         imu_data = receive_imu(ip, port)
         if imu_data is not None:
             dpg.set_value("imu_textfield", imu_data)
@@ -132,14 +128,16 @@ def update_thread(ip, port):
             print("Acceleration:", acceleration_array)
             print("Angular Rate:", angular_rate_array)
             print("Temperature:", temperature_value)
-
+        
         current_time = time.time()
         time_diff = current_time - last_time
         fps = 1.0 / time_diff if time_diff > 0 else 0
         print(f"FPS: {fps:.2f}")
+
+        #time.sleep(0.05)
+
         last_time = current_time
         
-        time.sleep(0.01)
 
 def update_leds(sender, app_data, user_data):
     # Convert the color values from float (0.0-1.0) to integer (0-255)
