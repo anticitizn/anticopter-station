@@ -57,7 +57,7 @@ def send_data(command, payload):
 def get_data(ip, port, command):
     # Create a UDP socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.settimeout(0.2)  # Set timeout to 1 second
+    sock.settimeout(0.2)
 
     try:
         message = command
@@ -66,7 +66,7 @@ def get_data(ip, port, command):
 
         try:
             # Receive image data
-            data, _ = sock.recvfrom(65536)  # Buffer size is 65536 bytes
+            data, _ = sock.recvfrom(65536)
             if data:
                 sock.close()
                 return data
@@ -81,8 +81,10 @@ def receive_image(ip, port):
     if data is not None:
         # Convert the byte data to numpy array
         np_array = np.frombuffer(data, dtype=np.uint8)
+
         # Decode the array into an image
         img = cv2.imdecode(np_array, cv2.IMREAD_COLOR)
+
         if img is not None:
             image = img
             print(f"Received image")
