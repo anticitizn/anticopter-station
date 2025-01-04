@@ -9,6 +9,10 @@ import re
 ip = "192.168.1.16"
 port = 3333
 
+acceleration_array = [[], [], []]
+angular_rate_array = [[], [], []]
+dummy_array = []
+
 def create_video_from_images(images, output_filename, fps=12):
     if not images:
         print("No images to create a video.")
@@ -57,7 +61,7 @@ def send_data(command, payload):
 def get_data(ip, port, command):
     # Create a UDP socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.settimeout(0.2)
+    sock.settimeout(0.5)
 
     try:
         message = command
@@ -98,45 +102,76 @@ def receive_imu(ip, port):
     if data is not None:
         imu_data = data.decode('utf-8')
 
-        return imu_data
+        acceleration_string = re.findall(r'Acceleration\[(.*?)\]', imu_data)[0]
+        angular_rate_string = re.findall(r'AngularRate\[(.*?)\]', imu_data)[0]
+        temperature_string = re.findall(r'Temperature\[(.*?)\]', imu_data)[0]
+        position_string = re.findall(r'Position\[(.*?)\]', imu_data)[0]
+        orientation_string = re.findall(r'Orientation\[(.*?)\]', imu_data)[0]
+
+        acceleration = list(map(float, acceleration_string.split(',')))
+        angular_rate = list(map(float, angular_rate_string.split(',')))
+        temperature = float(temperature_string)
+        position = list(map(float, position_string.split(',')))
+        orientation = list(map(float, orientation_string.split(',')))
+
+        return [acceleration, angular_rate, temperature, position, orientation]
 
 def update_texture(image):
     if image is not None:
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGBA)
         image = image.astype(np.float32) / 255.0
-        image = cv2.flip(image, 0)
 
         dpg.set_value("texture_tag", image.ravel())
 
 def update_thread(ip, port):
     last_time = time.time()
+    send_data("set_res_vga\0", "")
     while True:
         image = receive_image(ip, port)
-        if image is not None:
-            update_texture(image)
+        #if image is not None:
+        #    update_texture(image)
 
         imu_data = None
-        imu_data = receive_imu(ip, port)
-        if imu_data is not None:
-            dpg.set_value("imu_textfield", imu_data)
+        #imu_data = receive_imu(ip, port)
+        print(imu_data)
 
-            acceleration = re.findall(r'Acceleration\[(.*?)\]', imu_data)[0]
-            angular_rate = re.findall(r'AngularRate\[(.*?)\]', imu_data)[0]
-            temperature = re.findall(r'Temperature\[(.*?)\]', imu_data)[0]
-            acceleration_array = list(map(int, acceleration.split(',')))
-            angular_rate_array = list(map(int, angular_rate.split(',')))
-            temperature_value = float(temperature)
+        if imu_data:
+            acceleration = imu_data[0]
+            angular_rate = imu_data[1]
+            temperature = imu_data[2]
+            position = imu_data[3]
+            orientation = imu_data[4]
 
-            print("Acceleration:", acceleration_array)
-            print("Angular Rate:", angular_rate_array)
-            print("Temperature:", temperature_value)
-        
+            dpg.set_value("imu_textfield", f"Acceleration: {acceleration}\nAngular rate: {angular_rate}\nTemperature:{temperature}")
+
+            for i in range(3):
+                acceleration_array[i].append(acceleration[i])
+                angular_rate_array[i].append(angular_rate[i])
+
+                # Ensure the arrays are of proper length (e.g., trim to a specific size for visualization).
+                if len(acceleration_array[i]) > 100:
+                    acceleration_array[i].pop(0)  # Limit the size for performance.
+                if len(angular_rate_array[i]) > 100:
+                    angular_rate_array[i].pop(0)
+
+            #print(acceleration_array)
+            #print(angular_rate_array)
+
+            dpg.set_value("acc_x_series", [dummy_array, acceleration_array[0]])
+            dpg.set_value("acc_y_series", [dummy_array, acceleration_array[1]])
+            dpg.set_value("acc_z_series", [dummy_array, acceleration_array[2]])
+
+            dpg.set_value("ang_x_series", [dummy_array, angular_rate_array[0]])
+            dpg.set_value("ang_y_series", [dummy_array, angular_rate_array[1]])
+            dpg.set_value("ang_z_series", [dummy_array, angular_rate_array[2]])
+
+            print(f"Orientation: {orientation}, Position: {position}")
+
         current_time = time.time()
-        time_diff = current_time - last_time
-        fps = 1.0 / time_diff if time_diff > 0 else 0
-        print(f"FPS: {fps:.2f}")
-
-        #time.sleep(0.05)
+        dt = current_time - last_time
+        last_time = current_time
+        fps = 1.0 / dt if dt > 0 else 0
+        print(f"UPS: {fps:.2f}")
 
         last_time = current_time
         
@@ -157,17 +192,47 @@ def update_leds(sender, app_data, user_data):
     send_data("set_led\0", payload)
 
 def main():
+    for i in range(100):
+        dummy_array.append(i)
+
     dpg.create_context()
     dpg.create_viewport(title='Custom Title', width=650, height=650)
 
     with dpg.texture_registry(show=False):
-        width, height = 640, 480
+        width, height = 1280, 720
         texture_data = np.zeros((height, width, 4), dtype=np.float32).flatten().tolist()
         dpg.add_dynamic_texture(width=width, height=height, default_value=texture_data, tag="texture_tag")
 
     with dpg.window(tag="primary_window"):
         dpg.add_text("--- IMU data should go here ---", tag="imu_textfield")
+
+        # IMU Plots
+        with dpg.plot(label="IMU Data", height=200, width=600):
+            dpg.add_plot_legend()
+
+            dpg.add_plot_axis(dpg.mvXAxis, label="Time")
+            dpg.set_axis_limits(dpg.last_item(), 0, 100)
+            y_axis = dpg.add_plot_axis(dpg.mvYAxis, label="Values")
+
+            dpg.add_line_series([], [], label="Acc X", parent=y_axis, tag="acc_x_series")
+            dpg.add_line_series([], [], label="Acc Y", parent=y_axis, tag="acc_y_series")
+            dpg.add_line_series([], [], label="Acc Z", parent=y_axis, tag="acc_z_series")
+
+        with dpg.plot(label="IMU Data", height=200, width=600):
+            dpg.add_plot_legend()
+
+            dpg.add_plot_axis(dpg.mvXAxis, label="Time")
+            dpg.set_axis_limits(dpg.last_item(), 0, 100)
+            y_axis = dpg.add_plot_axis(dpg.mvYAxis, label="Values")
+
+            dpg.add_line_series([], [], label="Ang X", parent=y_axis, tag="ang_x_series")
+            dpg.add_line_series([], [], label="Ang Y", parent=y_axis, tag="ang_y_series")
+            dpg.add_line_series([], [], label="Ang Z", parent=y_axis, tag="ang_z_series")
+                
+        # Camera image
         dpg.add_image("texture_tag")
+
+        # LED control
         with dpg.group(horizontal=True):
             dpg.add_color_picker((255, 0, 255, 255), width=150, tag='led_colorpicker')
             with dpg.group(horizontal=False):
