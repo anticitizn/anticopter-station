@@ -4,14 +4,17 @@ import numpy as np
 import threading
 import dearpygui.dearpygui as dpg
 import time
+import math
 import re
 
-ip = "192.168.1.16"
+ip = "192.168.178.27"
 port = 3333
 
 acceleration_array = [[], [], []]
 angular_rate_array = [[], [], []]
 dummy_array = []
+# Initialize the last print time
+last_motor_callback_time = 0
 
 def create_video_from_images(images, output_filename, fps=12):
     if not images:
@@ -91,7 +94,7 @@ def receive_image(ip, port):
 
         if img is not None:
             image = img
-            print(f"Received image")
+            #print(f"Received image")
         else:
             print(f"Image could not be decoded")
 
@@ -125,15 +128,15 @@ def update_texture(image):
 
 def update_thread(ip, port):
     last_time = time.time()
-    send_data("set_res_vga\0", "")
+    #send_data("set_res_hd\0", "")
     while True:
         image = receive_image(ip, port)
-        #if image is not None:
-        #    update_texture(image)
+        if image is not None:
+            update_texture(image)
 
         imu_data = None
         #imu_data = receive_imu(ip, port)
-        print(imu_data)
+        #print(imu_data)
 
         if imu_data:
             acceleration = imu_data[0]
@@ -171,7 +174,7 @@ def update_thread(ip, port):
         dt = current_time - last_time
         last_time = current_time
         fps = 1.0 / dt if dt > 0 else 0
-        print(f"UPS: {fps:.2f}")
+        #print(f"UPS: {fps:.2f}")
 
         last_time = current_time
         
@@ -190,6 +193,39 @@ def update_leds(sender, app_data, user_data):
 
     # Call the send_data function with the prepared payload
     send_data("set_led\0", payload)
+
+def update_motors(sender, app_data, user_data):
+    global last_motor_callback_time
+
+    x, y, pwm_input, _ = app_data
+    pwm = int(round(pwm_input))
+
+    # Define position vectors for each motor
+    motor_dirs = {
+        0: (1, 1),    # top-right
+        1: (1, -1),   # bottom-right
+        2: (-1, -1),  # bottom-left
+        3: (-1, 1),   # top-left
+    }
+
+    motor_pwms = []
+    for i in range(4):
+        mx, my = motor_dirs[i]
+        distance = abs(math.sqrt(math.pow(mx - x, 2) + math.pow(my - y, 2)))
+        #print(f"Distance M{i}: {distance}")
+        motor_pwm = pwm -(max(distance - 1.414, 0) / 1.414)*pwm
+        motor_pwms.append(motor_pwm)
+
+    mot0, mot1, mot2, mot3 = motor_pwms
+    payload = f"{mot0} {mot1} {mot2} {mot3}" + '\0'
+
+    # Rate limit the callback to 20 Hz to prevent overloading the drone with too many separate UDP requests
+    current_time = time.time()
+    if current_time - last_motor_callback_time >= 0.05:
+        print(f"Motors -> M0: {mot0}, M1: {mot1}, M2: {mot2}, M3: {mot3}")
+        send_data("set_motors\0", payload)
+        last_motor_callback_time = current_time
+
 
 def main():
     for i in range(100):
@@ -241,6 +277,8 @@ def main():
                 dpg.add_button(label="LED 3", tag="led2", callback=update_leds, user_data='2')
                 dpg.add_button(label="LED 4", tag="led3", callback=update_leds, user_data='3')
                 dpg.add_button(label="All LEDs", tag="led_all", callback=update_leds, user_data='4')
+
+            dpg.add_3d_slider(tag="motors_slider", scale=0.5, min_x=-1, max_x=1, min_y=-1, max_y=1, min_z=0, max_z=100, callback=update_motors)
 
     dpg.setup_dearpygui()
     dpg.show_viewport()

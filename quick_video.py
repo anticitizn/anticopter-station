@@ -4,7 +4,7 @@ import numpy as np
 import threading
 import time
 
-ip = "192.168.1.16"
+ip = "192.168.178.27"
 port = 3333
 
 def get_data(ip, port, command):
