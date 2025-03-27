@@ -214,7 +214,7 @@ def update_motors(sender, app_data, user_data):
         distance = abs(math.sqrt(math.pow(mx - x, 2) + math.pow(my - y, 2)))
         #print(f"Distance M{i}: {distance}")
         motor_pwm = pwm -(max(distance - 1.414, 0) / 1.414)*pwm
-        motor_pwms.append(motor_pwm)
+        motor_pwms.append(int(round(motor_pwm)))
 
     mot0, mot1, mot2, mot3 = motor_pwms
     payload = f"{mot0} {mot1} {mot2} {mot3}" + '\0'
@@ -267,6 +267,7 @@ def main():
                 
         # Camera image
         dpg.add_image("texture_tag")
+        dpg.add_button(label="EMERGENCY OFF", callback=lambda n: send_data("set_motors\0", f"{0} {0} {0} {0}" + '\0'))
 
         # LED control
         with dpg.group(horizontal=True):
