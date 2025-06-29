@@ -6,12 +6,14 @@ import time
 
 ip = "192.168.4.1"
 port = 3333
+output_filename = "output_video.avi"
+frame_size = (1280, 720)  # Replace with actual resolution if known
+fps_estimate = 15        # Default FPS, can be adjusted
 
 def get_data(ip, port, command):
     """Send a command and receive data via UDP."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.settimeout(0.5)
-
     try:
         sock.sendto(command, (ip, port))
         data, _ = sock.recvfrom(65536)
@@ -36,8 +38,10 @@ def receive_image(ip, port):
 
 
 def display_images(ip, port):
-    """Continuously receive and display images."""
+    """Continuously receive, display, and save images."""
     last_time = time.time()
+    video_writer = None
+
     while True:
         image = receive_image(ip, port)
         current_time = time.time()
@@ -45,12 +49,23 @@ def display_images(ip, port):
         last_time = current_time
         fps = 1.0 / dt if dt > 0 else 0
         print(f"UPS: {fps:.2f}")
-        
+
         if image is not None:
+            # Initialize VideoWriter if not already initialized
+            if video_writer is None:
+                height, width, _ = image.shape
+                frame_size = (width, height)
+                fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+                video_writer = cv2.VideoWriter(output_filename, fourcc, fps, frame_size)
+
             cv2.imshow("Camera Feed", image)
+            video_writer.write(image)
+
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
+    if video_writer:
+        video_writer.release()
     cv2.destroyAllWindows()
 
 

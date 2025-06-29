@@ -7,7 +7,7 @@ import time
 import math
 import re
 
-ip = "192.168.178.27"
+ip = "192.168.4.1"
 port = 3333
 
 acceleration_array = [[], [], []]
