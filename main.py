@@ -274,11 +274,12 @@ def main():
 
                 dpg.add_plot_axis(dpg.mvXAxis, label="Time")
                 dpg.set_axis_limits(dpg.last_item(), 0, 100)
-                y_axis = dpg.add_plot_axis(dpg.mvYAxis, label="Values")
+                y_axis = dpg.add_plot_axis(dpg.mvYAxis, label="Values", tag="ang_y_axis")
 
                 dpg.add_line_series([], [], label="Ang X", parent=y_axis, tag="ang_x_series")
                 dpg.add_line_series([], [], label="Ang Y", parent=y_axis, tag="ang_y_series")
                 dpg.add_line_series([], [], label="Ang Z", parent=y_axis, tag="ang_z_series")
+                dpg.set_axis_limits("ang_y_axis", -190, 190)
 
             with dpg.group():
                 dpg.add_button(label="EMERGENCY OFF", callback=lambda n: send_data("set_control_target\0", f"{0} {0} {0} {0}" + '\0'), width=300)
