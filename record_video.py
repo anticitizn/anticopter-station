@@ -7,8 +7,8 @@ import time
 ip = "192.168.4.1"
 port = 3333
 output_filename = "output_video.avi"
-frame_size = (1280, 720)  # Replace with actual resolution if known
-fps_estimate = 15        # Default FPS, can be adjusted
+frame_size = (1280, 720)
+fps_estimate = 15
 
 def get_data(ip, port, command):
     """Send a command and receive data via UDP."""

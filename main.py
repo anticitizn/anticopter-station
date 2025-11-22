@@ -13,8 +13,9 @@ port = 3333
 acceleration_array = [[], [], []]
 angular_rate_array = [[], [], []]
 dummy_array = []
-# Initialize the last print time
+
 last_motor_callback_time = 0
+last_control_callback_time = 0
 
 def create_video_from_images(images, output_filename, fps=12):
     if not images:
@@ -108,16 +109,16 @@ def receive_imu(ip, port):
         acceleration_string = re.findall(r'Acceleration\[(.*?)\]', imu_data)[0]
         angular_rate_string = re.findall(r'AngularRate\[(.*?)\]', imu_data)[0]
         temperature_string = re.findall(r'Temperature\[(.*?)\]', imu_data)[0]
-        position_string = re.findall(r'Position\[(.*?)\]', imu_data)[0]
+        #position_string = re.findall(r'Position\[(.*?)\]', imu_data)[0]
         orientation_string = re.findall(r'Orientation\[(.*?)\]', imu_data)[0]
 
         acceleration = list(map(float, acceleration_string.split(',')))
         angular_rate = list(map(float, angular_rate_string.split(',')))
         temperature = float(temperature_string)
-        position = list(map(float, position_string.split(',')))
+        #position = list(map(float, position_string.split(',')))
         orientation = list(map(float, orientation_string.split(',')))
 
-        return [acceleration, angular_rate, temperature, position, orientation]
+        return [acceleration, angular_rate, temperature, orientation]
 
 def update_texture(image):
     if image is not None:
@@ -135,21 +136,20 @@ def update_thread(ip, port):
             update_texture(image)
 
         imu_data = None
-        #imu_data = receive_imu(ip, port)
+        imu_data = receive_imu(ip, port)
         #print(imu_data)
 
         if imu_data:
             acceleration = imu_data[0]
             angular_rate = imu_data[1]
             temperature = imu_data[2]
-            position = imu_data[3]
-            orientation = imu_data[4]
+            orientation = imu_data[3]
 
             dpg.set_value("imu_textfield", f"Acceleration: {acceleration}\nAngular rate: {angular_rate}\nTemperature:{temperature}")
 
             for i in range(3):
                 acceleration_array[i].append(acceleration[i])
-                angular_rate_array[i].append(angular_rate[i])
+                angular_rate_array[i].append(orientation[i])
 
                 # Ensure the arrays are of proper length (e.g., trim to a specific size for visualization).
                 if len(acceleration_array[i]) > 100:
@@ -160,15 +160,13 @@ def update_thread(ip, port):
             #print(acceleration_array)
             #print(angular_rate_array)
 
-            dpg.set_value("acc_x_series", [dummy_array, acceleration_array[0]])
-            dpg.set_value("acc_y_series", [dummy_array, acceleration_array[1]])
-            dpg.set_value("acc_z_series", [dummy_array, acceleration_array[2]])
+            # dpg.set_value("acc_x_series", [dummy_array, acceleration_array[0]])
+            # dpg.set_value("acc_y_series", [dummy_array, acceleration_array[1]])
+            # dpg.set_value("acc_z_series", [dummy_array, acceleration_array[2]])
 
             dpg.set_value("ang_x_series", [dummy_array, angular_rate_array[0]])
             dpg.set_value("ang_y_series", [dummy_array, angular_rate_array[1]])
             dpg.set_value("ang_z_series", [dummy_array, angular_rate_array[2]])
-
-            print(f"Orientation: {orientation}, Position: {position}")
 
         current_time = time.time()
         dt = current_time - last_time
@@ -226,6 +224,22 @@ def update_motors(sender, app_data, user_data):
         send_data("set_motors\0", payload)
         last_motor_callback_time = current_time
 
+def update_control(sender, app_data, user_data):
+    global last_control_callback_time
+
+    thrust = dpg.get_value('thrust_slider')
+    roll = dpg.get_value('roll_slider')
+    pitch = dpg.get_value('pitch_slider')
+    yaw = dpg.get_value('yaw_slider')
+
+    payload = f"{thrust} {roll} {pitch} {yaw}" + '\0'
+
+    # Rate limit the callback to 20 Hz to prevent overloading the drone with too many separate UDP requests
+    current_time = time.time()
+    if current_time - last_control_callback_time >= 0.05:
+        send_data("set_control_target\0", payload)
+        last_control_callback_time = current_time
+
 
 def main():
     for i in range(100):
@@ -243,34 +257,36 @@ def main():
         dpg.add_text("--- IMU data should go here ---", tag="imu_textfield")
 
         # IMU Plots
-        with dpg.plot(label="IMU Data", height=200, width=600):
-            dpg.add_plot_legend()
+        # with dpg.plot(label="IMU Data", height=200, width=600):
+        #     dpg.add_plot_legend()
 
-            dpg.add_plot_axis(dpg.mvXAxis, label="Time")
-            dpg.set_axis_limits(dpg.last_item(), 0, 100)
-            y_axis = dpg.add_plot_axis(dpg.mvYAxis, label="Values")
+        #     dpg.add_plot_axis(dpg.mvXAxis, label="Time")
+        #     dpg.set_axis_limits(dpg.last_item(), 0, 100)
+        #     y_axis = dpg.add_plot_axis(dpg.mvYAxis, label="Values")
 
-            dpg.add_line_series([], [], label="Acc X", parent=y_axis, tag="acc_x_series")
-            dpg.add_line_series([], [], label="Acc Y", parent=y_axis, tag="acc_y_series")
-            dpg.add_line_series([], [], label="Acc Z", parent=y_axis, tag="acc_z_series")
-
-        with dpg.plot(label="IMU Data", height=200, width=600):
-            dpg.add_plot_legend()
-
-            dpg.add_plot_axis(dpg.mvXAxis, label="Time")
-            dpg.set_axis_limits(dpg.last_item(), 0, 100)
-            y_axis = dpg.add_plot_axis(dpg.mvYAxis, label="Values")
-
-            dpg.add_line_series([], [], label="Ang X", parent=y_axis, tag="ang_x_series")
-            dpg.add_line_series([], [], label="Ang Y", parent=y_axis, tag="ang_y_series")
-            dpg.add_line_series([], [], label="Ang Z", parent=y_axis, tag="ang_z_series")
-                
-        # Camera image
-        dpg.add_image("texture_tag")
-        dpg.add_button(label="EMERGENCY OFF", callback=lambda n: send_data("set_motors\0", f"{0} {0} {0} {0}" + '\0'))
-
+        #     dpg.add_line_series([], [], label="Acc X", parent=y_axis, tag="acc_x_series")
+        #     dpg.add_line_series([], [], label="Acc Y", parent=y_axis, tag="acc_y_series")
+        #     dpg.add_line_series([], [], label="Acc Z", parent=y_axis, tag="acc_z_series")
         # LED control
         with dpg.group(horizontal=True):
+            with dpg.plot(label="Orientation", height=200, width=600):
+                dpg.add_plot_legend()
+
+                dpg.add_plot_axis(dpg.mvXAxis, label="Time")
+                dpg.set_axis_limits(dpg.last_item(), 0, 100)
+                y_axis = dpg.add_plot_axis(dpg.mvYAxis, label="Values")
+
+                dpg.add_line_series([], [], label="Ang X", parent=y_axis, tag="ang_x_series")
+                dpg.add_line_series([], [], label="Ang Y", parent=y_axis, tag="ang_y_series")
+                dpg.add_line_series([], [], label="Ang Z", parent=y_axis, tag="ang_z_series")
+
+            with dpg.group():
+                dpg.add_button(label="EMERGENCY OFF", callback=lambda n: send_data("set_control_target\0", f"{0} {0} {0} {0}" + '\0'), width=300)
+                dpg.add_slider_float(label="Thrust", tag="thrust_slider", max_value=100, min_value = 0, width=300, callback=update_control)
+                dpg.add_slider_float(label="Roll", tag="roll_slider", max_value=10, min_value = -10, width=300, callback=update_control)
+                dpg.add_slider_float(label="Pitch", tag="pitch_slider", max_value=10, min_value = -10, width=300, callback=update_control)
+                dpg.add_slider_float(label="Yaw", tag="yaw_slider", max_value=180, min_value = -180, width=300, callback=update_control)
+
             dpg.add_color_picker((255, 0, 255, 255), width=150, tag='led_colorpicker')
             with dpg.group(horizontal=False):
                 dpg.add_button(label="LED 1", tag="led0", callback=update_leds, user_data='0')
@@ -279,7 +295,10 @@ def main():
                 dpg.add_button(label="LED 4", tag="led3", callback=update_leds, user_data='3')
                 dpg.add_button(label="All LEDs", tag="led_all", callback=update_leds, user_data='4')
 
-            dpg.add_3d_slider(tag="motors_slider", scale=0.5, min_x=-1, max_x=1, min_y=-1, max_y=1, min_z=0, max_z=100, callback=update_motors)
+            #dpg.add_3d_slider(tag="motors_slider", scale=0.5, min_x=-1, max_x=1, min_y=-1, max_y=1, min_z=0, max_z=100, callback=update_motors)
+                
+        # Camera image
+        dpg.add_image("texture_tag")
 
     dpg.setup_dearpygui()
     dpg.show_viewport()
