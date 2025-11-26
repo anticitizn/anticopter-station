@@ -38,7 +38,7 @@ def create_video_from_images(images, output_filename, fps=12):
 def send_data(command, payload):
     # Create a UDP socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.settimeout(1.0)  # Set timeout to 1 second
+    sock.settimeout(1.0)
 
     try:
         message = command
@@ -130,10 +130,11 @@ def update_texture(image):
 def update_thread(ip, port):
     last_time = time.time()
     #send_data("set_res_hd\0", "")
+
     while True:
         image = receive_image(ip, port)
         if image is not None:
-            update_texture(image)
+           update_texture(image)
 
         imu_data = None
         imu_data = receive_imu(ip, port)
@@ -151,18 +152,12 @@ def update_thread(ip, port):
                 acceleration_array[i].append(acceleration[i])
                 angular_rate_array[i].append(orientation[i])
 
-                # Ensure the arrays are of proper length (e.g., trim to a specific size for visualization).
-                if len(acceleration_array[i]) > 100:
-                    acceleration_array[i].pop(0)  # Limit the size for performance.
-                if len(angular_rate_array[i]) > 100:
+                # Trim the arrays
+                if len(angular_rate_array[i]) > 1000:
                     angular_rate_array[i].pop(0)
 
             #print(acceleration_array)
             #print(angular_rate_array)
-
-            # dpg.set_value("acc_x_series", [dummy_array, acceleration_array[0]])
-            # dpg.set_value("acc_y_series", [dummy_array, acceleration_array[1]])
-            # dpg.set_value("acc_z_series", [dummy_array, acceleration_array[2]])
 
             dpg.set_value("ang_x_series", [dummy_array, angular_rate_array[0]])
             dpg.set_value("ang_y_series", [dummy_array, angular_rate_array[1]])
@@ -184,45 +179,8 @@ def update_leds(sender, app_data, user_data):
     # Combine the RGB values into a payload string
     payload = user_data + " " + f"{r} {g} {b}" + '\0'
 
-    # Example debug prints
-    print(f"Sender: {sender}")
-    print(f"RGB Values: ({r}, {g}, {b})")
-    print(f"Payload: {payload}")
-
     # Call the send_data function with the prepared payload
     send_data("set_led\0", payload)
-
-def update_motors(sender, app_data, user_data):
-    global last_motor_callback_time
-
-    x, y, pwm_input, _ = app_data
-    pwm = int(round(pwm_input))
-
-    # Define position vectors for each motor
-    motor_dirs = {
-        0: (1, 1),    # top-right
-        1: (1, -1),   # bottom-right
-        2: (-1, -1),  # bottom-left
-        3: (-1, 1),   # top-left
-    }
-
-    motor_pwms = []
-    for i in range(4):
-        mx, my = motor_dirs[i]
-        distance = abs(math.sqrt(math.pow(mx - x, 2) + math.pow(my - y, 2)))
-        #print(f"Distance M{i}: {distance}")
-        motor_pwm = pwm -(max(distance - 1.414, 0) / 1.414)*pwm
-        motor_pwms.append(int(round(motor_pwm)))
-
-    mot0, mot1, mot2, mot3 = motor_pwms
-    payload = f"{mot0} {mot1} {mot2} {mot3}" + '\0'
-
-    # Rate limit the callback to 20 Hz to prevent overloading the drone with too many separate UDP requests
-    current_time = time.time()
-    if current_time - last_motor_callback_time >= 0.05:
-        print(f"Motors -> M0: {mot0}, M1: {mot1}, M2: {mot2}, M3: {mot3}")
-        send_data("set_motors\0", payload)
-        last_motor_callback_time = current_time
 
 def update_control(sender, app_data, user_data):
     global last_control_callback_time
@@ -233,16 +191,12 @@ def update_control(sender, app_data, user_data):
     yaw = dpg.get_value('yaw_slider')
 
     payload = f"{thrust} {roll} {pitch} {yaw}" + '\0'
-
-    # Rate limit the callback to 20 Hz to prevent overloading the drone with too many separate UDP requests
-    current_time = time.time()
-    if current_time - last_control_callback_time >= 0.05:
-        send_data("set_control_target\0", payload)
-        last_control_callback_time = current_time
+    
+    send_data("set_control_target\0", payload)
 
 
 def main():
-    for i in range(100):
+    for i in range(1000):
         dummy_array.append(i)
 
     dpg.create_context()
@@ -256,24 +210,13 @@ def main():
     with dpg.window(tag="primary_window"):
         dpg.add_text("--- IMU data should go here ---", tag="imu_textfield")
 
-        # IMU Plots
-        # with dpg.plot(label="IMU Data", height=200, width=600):
-        #     dpg.add_plot_legend()
-
-        #     dpg.add_plot_axis(dpg.mvXAxis, label="Time")
-        #     dpg.set_axis_limits(dpg.last_item(), 0, 100)
-        #     y_axis = dpg.add_plot_axis(dpg.mvYAxis, label="Values")
-
-        #     dpg.add_line_series([], [], label="Acc X", parent=y_axis, tag="acc_x_series")
-        #     dpg.add_line_series([], [], label="Acc Y", parent=y_axis, tag="acc_y_series")
-        #     dpg.add_line_series([], [], label="Acc Z", parent=y_axis, tag="acc_z_series")
         # LED control
         with dpg.group(horizontal=True):
             with dpg.plot(label="Orientation", height=200, width=600):
                 dpg.add_plot_legend()
 
                 dpg.add_plot_axis(dpg.mvXAxis, label="Time")
-                dpg.set_axis_limits(dpg.last_item(), 0, 100)
+                dpg.set_axis_limits(dpg.last_item(), 0, 1000)
                 y_axis = dpg.add_plot_axis(dpg.mvYAxis, label="Values", tag="ang_y_axis")
 
                 dpg.add_line_series([], [], label="Ang X", parent=y_axis, tag="ang_x_series")
@@ -295,8 +238,6 @@ def main():
                 dpg.add_button(label="LED 3", tag="led2", callback=update_leds, user_data='2')
                 dpg.add_button(label="LED 4", tag="led3", callback=update_leds, user_data='3')
                 dpg.add_button(label="All LEDs", tag="led_all", callback=update_leds, user_data='4')
-
-            #dpg.add_3d_slider(tag="motors_slider", scale=0.5, min_x=-1, max_x=1, min_y=-1, max_y=1, min_z=0, max_z=100, callback=update_motors)
                 
         # Camera image
         dpg.add_image("texture_tag")
