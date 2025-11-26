@@ -7,8 +7,8 @@ import time
 ip = "192.168.4.1"
 port = 3333
 
+# Send a command and wait for a response over UDP
 def get_data(ip, port, command):
-    """Send a command and receive data via UDP."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.settimeout(0.5)
 
@@ -21,9 +21,8 @@ def get_data(ip, port, command):
     finally:
         sock.close()
 
-
+# Receive and decode an image
 def receive_image(ip, port):
-    """Receive and decode an image."""
     data = get_data(ip, port, b'get_camera')
     if data:
         np_array = np.frombuffer(data, dtype=np.uint8)
@@ -34,9 +33,8 @@ def receive_image(ip, port):
             print("Image could not be decoded")
     return None
 
-
+# Continuously receive and display images
 def display_images(ip, port):
-    """Continuously receive and display images."""
     last_time = time.time()
     while True:
         image = receive_image(ip, port)
@@ -44,7 +42,7 @@ def display_images(ip, port):
         dt = current_time - last_time
         last_time = current_time
         fps = 1.0 / dt if dt > 0 else 0
-        print(f"UPS: {fps:.2f}")
+        print(f"FPS: {fps:.2f}")
         
         if image is not None:
             cv2.imshow("Camera Feed", image)

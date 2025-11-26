@@ -17,6 +17,14 @@ dummy_array = []
 last_motor_callback_time = 0
 last_control_callback_time = 0
 
+# Thread-safe shared buffers
+image_lock = threading.Lock()
+latest_image = None
+
+imu_lock = threading.Lock()
+latest_imu = None
+
+
 def create_video_from_images(images, output_filename, fps=12):
     if not images:
         print("No images to create a video.")
@@ -128,48 +136,56 @@ def update_texture(image):
         dpg.set_value("texture_tag", image.ravel())
 
 def update_thread(ip, port):
-    last_time = time.time()
-    #send_data("set_res_hd\0", "")
+    global latest_image, latest_imu
 
     while True:
-        image = receive_image(ip, port)
-        if image is not None:
-           update_texture(image)
+        img = receive_image(ip, port)
+        if img is not None:
+            with image_lock:
+                latest_image = img.copy()
 
-        imu_data = None
-        imu_data = receive_imu(ip, port)
-        #print(imu_data)
+        imu = receive_imu(ip, port)
+        if imu is not None:
+            with imu_lock:
+                latest_imu = imu
 
-        if imu_data:
-            acceleration = imu_data[0]
-            angular_rate = imu_data[1]
-            temperature = imu_data[2]
-            orientation = imu_data[3]
 
-            dpg.set_value("imu_textfield", f"Acceleration: {acceleration}\nAngular rate: {angular_rate}\nTemperature:{temperature}")
+def gui_update_callback():
+    global latest_image, latest_imu
 
-            for i in range(3):
-                acceleration_array[i].append(acceleration[i])
-                angular_rate_array[i].append(orientation[i])
+    # Update image
+    with image_lock:
+        if latest_image is not None:
+            img = latest_image.copy()
+        else:
+            img = None
 
-                # Trim the arrays
-                if len(angular_rate_array[i]) > 1000:
-                    angular_rate_array[i].pop(0)
+    if img is not None:
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGBA)
+        img = img.astype(np.float32) / 255.0
+        dpg.set_value("texture_tag", img.ravel())
 
-            #print(acceleration_array)
-            #print(angular_rate_array)
+    # Update IMU
+    with imu_lock:
+        imu = latest_imu
 
-            dpg.set_value("ang_x_series", [dummy_array, angular_rate_array[0]])
-            dpg.set_value("ang_y_series", [dummy_array, angular_rate_array[1]])
-            dpg.set_value("ang_z_series", [dummy_array, angular_rate_array[2]])
+    if imu is not None:
+        acceleration, angular_rate, temperature, orientation = imu
 
-        current_time = time.time()
-        dt = current_time - last_time
-        last_time = current_time
-        fps = 1.0 / dt if dt > 0 else 0
-        #print(f"UPS: {fps:.2f}")
+        dpg.set_value("imu_textfield",
+                      f"Acceleration: {acceleration}\n"
+                      f"Angular rate: {angular_rate}\n"
+                      f"Temperature:{temperature}")
 
-        last_time = current_time
+        for i in range(3):
+            acceleration_array[i].append(acceleration[i])
+            angular_rate_array[i].append(orientation[i])
+            if len(angular_rate_array[i]) > 100:
+                angular_rate_array[i].pop(0)
+
+        dpg.set_value("ang_x_series", [dummy_array, angular_rate_array[0]])
+        dpg.set_value("ang_y_series", [dummy_array, angular_rate_array[1]])
+        dpg.set_value("ang_z_series", [dummy_array, angular_rate_array[2]])
         
 
 def update_leds(sender, app_data, user_data):
@@ -196,7 +212,7 @@ def update_control(sender, app_data, user_data):
 
 
 def main():
-    for i in range(1000):
+    for i in range(100):
         dummy_array.append(i)
 
     dpg.create_context()
@@ -216,7 +232,7 @@ def main():
                 dpg.add_plot_legend()
 
                 dpg.add_plot_axis(dpg.mvXAxis, label="Time")
-                dpg.set_axis_limits(dpg.last_item(), 0, 1000)
+                dpg.set_axis_limits(dpg.last_item(), 0, 100)
                 y_axis = dpg.add_plot_axis(dpg.mvYAxis, label="Values", tag="ang_y_axis")
 
                 dpg.add_line_series([], [], label="Ang X", parent=y_axis, tag="ang_x_series")
@@ -249,7 +265,9 @@ def main():
     # Start the image receiving thread
     threading.Thread(target=update_thread, args=(ip, port), daemon=True).start()
 
-    dpg.start_dearpygui()
+    while(dpg.is_dearpygui_running()):
+        gui_update_callback()
+        dpg.render_dearpygui_frame()   
     dpg.destroy_context()
 
 if __name__ == "__main__":
