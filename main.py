@@ -241,7 +241,7 @@ def main():
                 dpg.set_axis_limits("ang_y_axis", -190, 190)
 
             with dpg.group():
-                dpg.add_button(label="EMERGENCY OFF", callback=lambda n: send_data("set_control_target\0", f"{0} {0} {0} {0}" + '\0'), width=300)
+                dpg.add_button(label="EMERGENCY OFF", callback=lambda n: send_data("set_control_target\0", f"{0} {0} {0} {0}" + '\0'), width=300, height=80)
                 dpg.add_slider_float(label="Thrust", tag="thrust_slider", max_value=100, min_value = 0, width=300, callback=update_control)
                 dpg.add_slider_float(label="Roll", tag="roll_slider", max_value=10, min_value = -10, width=300, callback=update_control)
                 dpg.add_slider_float(label="Pitch", tag="pitch_slider", max_value=10, min_value = -10, width=300, callback=update_control)

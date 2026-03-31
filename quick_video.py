@@ -42,7 +42,7 @@ def display_images(ip, port):
         dt = current_time - last_time
         last_time = current_time
         fps = 1.0 / dt if dt > 0 else 0
-        print(f"FPS: {fps:.2f}")
+        # print(f"FPS: {fps:.2f}")
         
         if image is not None:
             cv2.imshow("Camera Feed", image)
