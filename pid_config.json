@@ -1,0 +1,44 @@
+{
+  "rate_roll": {
+    "kP": 0.2,
+    "kI": 0.05,
+    "kD": 0.0,
+    "int_up_lim": 5.0,
+    "int_low_lim": -5.0
+  },
+  "rate_pitch": {
+    "kP": 0.2,
+    "kI": 0.05,
+    "kD": 0.0,
+    "int_up_lim": 5.0,
+    "int_low_lim": -5.0
+  },
+  "rate_yaw": {
+    "kP": 0.2,
+    "kI": 0.0,
+    "kD": 0.0,
+    "int_up_lim": 0.0,
+    "int_low_lim": 0.0
+  },
+  "angle_roll": {
+    "kP": 1.0,
+    "kI": 0.0,
+    "kD": 0.0,
+    "int_up_lim": 0.0,
+    "int_low_lim": 0.0
+  },
+  "angle_pitch": {
+    "kP": 1.0,
+    "kI": 0.0,
+    "kD": 0.0,
+    "int_up_lim": 0.0,
+    "int_low_lim": 0.0
+  },
+  "angle_yaw": {
+    "kP": 1.0,
+    "kI": 0.0,
+    "kD": 0.0,
+    "int_up_lim": 0.0,
+    "int_low_lim": 0.0
+  }
+}
